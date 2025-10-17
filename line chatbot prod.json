@@ -1,0 +1,551 @@
+{
+  "name": "line chatbot prod",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-n8n-webhook",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1264,
+        32
+      ],
+      "id": "0b9801ee-b72b-492c-ad6d-243194ac837e",
+      "name": "Webhook",
+      "webhookId": "59f44723-b02f-4bc3-bef8-467ba7d5f888"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.output }}\n\n\n",
+        "options": {
+          "systemMessage": "You are a polite, concise, and professional female AI assistant with primary expertise in movie data. \n\nAlways adhere to the following data retrieval protocol:\n\n1 retrieve data using the **MongoDB Vector Store** tool to find a movie\n\n2 If a movie is found, answer and state the source is \"our database.\"\n\n2.1 If a movie is not found in database, find the answer somewhere else and answer information and state that your sources come from outside database.\n\n3. If the query is not related to movies, politely inform users that you are prioritize movie related query.\n\n4. Always Return answer in the language that a user asked \n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        32
+      ],
+      "id": "8c7ecc3c-ca17-4ff8-94fa-8f45e12ea452",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.events[0].message.type }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "5e63c222-4417-4ff8-b9fa-8e2ea21cf1d7"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6cf1653c-0b79-463f-a0a8-f2b6ad3beed4",
+                    "leftValue": "={{ $json.body.events[0].message.type }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3e1a955a-a238-4924-888d-196b5e46797a",
+                    "leftValue": "={{ $json.body.events[0].message.type }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -1056,
+        32
+      ],
+      "id": "8eb3ef6d-2f8d-48b0-a66b-2c91b387851f",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. ดึงข้อความดิบจาก AI Agent (สมมติว่า AI Agent ส่ง Output ออกมาในตัวแปรชื่อ 'output')\nconst originalText = $input.first().json.output;\n\n// 2. จัดการปัญหา Bad Control Character (New Lines) ก่อน\n//    แทนที่การขึ้นบรรทัดใหม่ทุกรูปแบบด้วย String Literal \"\\n\" ที่ JSON ยอมรับ\nlet cleanedText = originalText;\n\n// ตรวจสอบและแทนที่:\nif (typeof originalText === 'string') {\n    // Escape Double Quotes (ถ้ามี) ก่อน เพื่อไม่ให้ชนกับ JSON String\n    cleanedText = cleanedText.replace(/\"/g, '\\\\\"');\n    \n    // **เพิ่มโค้ดนี้เพื่อแทนที่เครื่องหมายตัวหนา (**) ด้วยช่องว่างหรือไม่มีอะไรเลย**\n    // ใช้ Regular Expression: /\\*\\*/g เพื่อค้นหา ** ทั้งหมด (ต้อง escape * ด้วย \\)\n    cleanedText = cleanedText.replace(/\\*\\*/g, '');\n    \n    // Escape New Line Characters (ตัวที่เป็น Bad Control Character)\n    // นี่คือขั้นตอนสำคัญที่ต้องแปลง Physical New Line ให้เป็น \\n String\n    cleanedText = cleanedText.replace(/\\r\\n/g, '\\\\n') // Windows CRLF\n                               .replace(/\\n/g, '\\\\n')    // Linux/MacOS LF\n                               .replace(/\\r/g, '\\\\n');    // Carriage Return (ถ้ามี)\n}\n\n// 3. ส่งตัวแปรที่ Clean แล้ว (final_line_text) กลับไป\nreturn [{ \n    json: { \n        final_line_text: cleanedText \n    } \n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        32
+      ],
+      "id": "5eb586d2-722b-4dab-8486-6d7c6f9f2059",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "url": "=https://api-data.line.me/v2/bot/message/{{ $json.body.events[0].message.id }}/content",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TyL+zBKpWoReBGWaeB/6oOrHzDopHrSPluTX9gPhfymhoc/vcA3jwMgJhcy5ru0gduCsXJBv1+bvc4kl6pmxOaOSMAk0Hh4kekqV4TAJnffJGiA9/FDIiB9aV6R1ZN0LhWGgJ63qGdRSEzIB4VK08QdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -864,
+        208
+      ],
+      "id": "ac416365-a541-4be5-9f78-88069cf78bf2",
+      "name": "Get image",
+      "onError": "continueRegularOutput",
+      "notes": "Error โปรดลองใหม่อีกครั้ง"
+    },
+    {
+      "parameters": {
+        "url": "=https://api-data.line.me/v2/bot/message/{{ $json.body.events[0].message.id }}/content",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TyL+zBKpWoReBGWaeB/6oOrHzDopHrSPluTX9gPhfymhoc/vcA3jwMgJhcy5ru0gduCsXJBv1+bvc4kl6pmxOaOSMAk0Hh4kekqV4TAJnffJGiA9/FDIiB9aV6R1ZN0LhWGgJ63qGdRSEzIB4VK08QdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -768,
+        80
+      ],
+      "id": "9274232f-0907-4e02-9e4c-109ce6d8877a",
+      "name": "Get audio",
+      "onError": "continueRegularOutput",
+      "notes": "Error โปรดลองใหม่อีกครั้ง"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TyL+zBKpWoReBGWaeB/6oOrHzDopHrSPluTX9gPhfymhoc/vcA3jwMgJhcy5ru0gduCsXJBv1+bvc4kl6pmxOaOSMAk0Hh4kekqV4TAJnffJGiA9/FDIiB9aV6R1ZN0LhWGgJ63qGdRSEzIB4VK08QdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"replyToken\":\"{{ $('Webhook').item.json.body.events[0].replyToken }}\",\n  \"messages\": [\n    {\n      \"type\": \"text\",\n      \"text\": \"{{ $json.final_line_text }}\"\n    }\n  ]\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        32
+      ],
+      "id": "e22f066a-7bb7-400d-8bea-691f6841d246",
+      "name": "reply message"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nlet output\n\nif ($('Webhook').first().json.body.events[0].message.type === 'text') {\n  output = $input.first().json.body?.events?.[0]?.message?.text\n}\nelse if ($('Webhook').first().json.body.events[0].message.type === 'image') {\n  output = $input.first().json.candidates[0].content.parts[0].text\n} else if ($('Webhook').first().json.body.events[0].message.type === 'audio') {\n  output = $input.first().json.content.parts[0].text\n}\n\nreturn {\n    json: {\n        messages: [\n            {\n                \"type\": \"human\",\n                \"data\": {\n                    \"content\": output,\n                    \"additional_kwargs\": {},\n                    \"response_metadata\": {}\n                }\n            }\n        ],\n        output: output\n    }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "62fa05a9-f748-4dac-a06d-0d3e4d053e1d",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-ada-002",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsAzureOpenAi",
+      "typeVersion": 1,
+      "position": [
+        960,
+        496
+      ],
+      "id": "c49f142e-d32c-4b4d-812a-1ea58c4a76c6",
+      "name": "Embeddings Azure OpenAI",
+      "credentials": {
+        "azureOpenAiApi": {
+          "id": "3IAPkdNTXRRmDKRd",
+          "name": "Azure Open AI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').item.json.body.events[0].source.userId }}",
+        "collectionName": "chat-history",
+        "databaseName": "n8n-rag"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryMongoDbChat",
+      "typeVersion": 1,
+      "position": [
+        592,
+        320
+      ],
+      "id": "b523c1f4-6a67-47a2-81fa-84de79ca7400",
+      "name": "MongoDB Chat Memory",
+      "credentials": {
+        "mongoDb": {
+          "id": "QRkaOp1WKKWJehdO",
+          "name": "MongoDB account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "If query is in Thai, translate from Thai to English before proceeding.\n\nretreived movie data from mongoDB as user requested\n\nWhen including the movie poster link, explicitly prefix it with 'Poster Link: ' or 'รูปโปสเตอร์ Link' to clarify its purpose.",
+        "mongoCollection": {
+          "__rl": true,
+          "value": "embedded_movies",
+          "mode": "list",
+          "cachedResultName": "embedded_movies"
+        },
+        "embedding": "plot_embedding",
+        "vectorIndexName": "vector_index",
+        "topK": 5,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreMongoDBAtlas",
+      "typeVersion": 1.3,
+      "position": [
+        864,
+        288
+      ],
+      "id": "bca680f2-fe8c-4359-acad-817f04bce579",
+      "name": "MongoDB Atlas Vector Store",
+      "credentials": {
+        "mongoDb": {
+          "id": "z0zRiEOQPpJe5veI",
+          "name": "MongoDB account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "text": "อธิบายรูปนี้เป็นภาษาไทย",
+        "inputType": "binary",
+        "simplify": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        256
+      ],
+      "id": "2a8983a3-0715-436e-bd97-01806fa2ce75",
+      "name": "Analyze an image",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "tWv5Lbq8TaGKCIq0",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        80
+      ],
+      "id": "3960165b-589e-4b10-b494-cda0789c5bee",
+      "name": "Transcribe a recording",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "tWv5Lbq8TaGKCIq0",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        384,
+        304
+      ],
+      "id": "8ad471c7-7a4c-4335-8d1e-1c8b5eddbd14",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "kHQLhAkpVd9VfhhS",
+          "name": "OpenAi account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "reply message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get image": {
+      "main": [
+        [
+          {
+            "node": "Analyze an image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get audio": {
+      "main": [
+        [
+          {
+            "node": "Transcribe a recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Azure OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "MongoDB Atlas Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB Atlas Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze an image": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe a recording": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "63a0dbad-ceb8-4284-982a-f2fb1a999de6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "610b3d2ca518cf62e5b0f1ae8741e3831320201bba86add075142bc40effc94c"
+  },
+  "id": "B2ZkUpWPqMJdVJpQ",
+  "tags": []
+}
